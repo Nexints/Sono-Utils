@@ -155,5 +155,8 @@ server/shared
 
 # Sono-Overlay
 Sono-Overlay/default.ini
-addons/*.exe
 .sono-utils.exe
+
+# YT-dlp
+addons/*.exe
+.dist/
