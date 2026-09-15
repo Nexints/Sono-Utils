@@ -107,7 +107,9 @@ function handleSelection(label) {
     console.log("The goal of this project is to provide an easy to use manual for ALL of your charting needs!");
     console.log("- Sono-Overlay is under the AGPL");
     console.log("- YT-DLP is under the Unlicense");
-    console.log("- All other projects are licensed under the Nexint TOS.");
+    console.log("- Proseka Faithful is under the Nexint TOS");
+    console.log("- All other coding projects are licensed under the Apache 2.0");
+    console.log("");
     console.log("Nexint TOS is mentioned here https://nexint.ca/tos");
     returnToMenu();
   }
@@ -117,6 +119,10 @@ function handleSelection(label) {
     console.log("- This project was partially coded by AI.");
     console.log("- However, not all of the project is AI coded (obviously),");
     console.log("- and I aim to use AI responsibly.");
+    console.log("");
+    console.log("This project remains compliant with the AGPL by acting as a mere aggregator.");
+    console.log("The main SonoUtils only acts as a launcher for various indepent applets.");
+    console.log("Have fun when using this tool! There are no blacklists, and this tool remains open source.");
     returnToMenu();
   }
 
@@ -143,6 +149,7 @@ function handleSelection(label) {
     }
 
   } else if (label === 'Launch Sono-Overlay') {
+
     // Fully release the parent's control over the terminal keyboard channel
     process.stdin.removeListener('data', onRawConsoleDataInput);
     if (process.stdin.isTTY) {
@@ -152,6 +159,15 @@ function handleSelection(label) {
 
     const overlayDir = path.join(workingDir, 'Sono-Overlay');
     const overlayPath = path.join(overlayDir, 'sono-overlay.exe');
+    
+    if (!fs.existsSync(overlayPath)) {
+      console.clear();
+      console.log(`\x1b[31m--- [Feature Restricted] ---\x1b[0m\n`);
+      console.log("Sono-Overlay is not found in your directory footprint.");
+      console.log("To use this feature, download the AGPL-licensed binary into /Sono-Overlay.\n");
+      returnToMenu();
+      return;
+    }
 
     console.log(`--- Starting Sono-Overlay ---\n`);
 
