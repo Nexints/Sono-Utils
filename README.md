@@ -49,8 +49,7 @@ Sono-Utils:
 5. (NEW) You are not to use this tool on other people's charts, unless you have express permission from said person.
 
 ## Legal:
-The included ProSeka Faithful UI is governed under my [Nexint TOS](https://nexint.ca/tos).
-While the whole wrapper is under the Apache 2.0 License, parts of this program are under the AGPL and parts are under my Nexint TOS.
+The included ProSeka Faithful UI is governed under my [Nexint TOS](https://nexint.ca/tos). The wrapper (this utility) is under the Apache 2.0, but other utilities are under varying licenses. Consult the utilities in question if you want to modify them.
 
 This program remains compliant by ensuring that this program does not rely on AGPL code. This code is mere aggregation of AGPL code.
 
