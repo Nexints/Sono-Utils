@@ -143,22 +143,13 @@ vite.config.ts.timestamp-*
 .vite/
 
 # More stuff
-server/node_modules
-server/pack
-server/source
-server/share
-server/play
-server/watch
-server/tutorial
-server/preview
-server/shared
+server/
 
 # Sono-Overlay
 Sono-Overlay/
 sono-utils.exe
-build.zip
 
 # YT-dlp
-addons/*.exe
+addons/
 dist/
 build/

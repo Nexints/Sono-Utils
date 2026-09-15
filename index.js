@@ -16,10 +16,12 @@ const MENU_ITEMS = [
   'Launch Sonolus Server',
   'Launch Sono-Overlay',
   'Launch YT-DLP wrapper',
+  'Update All Subsystems', // Added Update Option
   'Credits',
   'Disclaimers',
   'Exit Launcher'
 ];
+
 let selectedIndex = 0;
 let activeChildStdin = null;
 
@@ -92,10 +94,44 @@ function handleSelection(label) {
   const dir = path.join(workingDir, 'server');
 
   if (label === 'Exit Launcher') process.exit(0);
+  if (label === 'Update All Subsystems') {
+    const allTools = ['sono-server', 'sono-overlay', 'yt-dlp', 'ffmpeg', 'ffprobe'];
+    console.log(`\x1b[95m--- Initializing Global System Update Loop ---\x1b[0m\n`);
+
+    const triggerSequentialUpdate = (index) => {
+      if (index >= allTools.length) {
+        console.log(`\x1b[32m[Success]: All core systems up to date!\x1b[0m\n`);
+        returnToMenu();
+        return;
+      }
+      // Pass 'true' to force download and overwrite local files
+      verifyAssetDependency(workingDir, allTools[index], () => {
+        triggerSequentialUpdate(index + 1);
+      }, true);
+    };
+
+    triggerSequentialUpdate(0);
+    return;
+  }
+
   if (label === 'Launch YT-DLP wrapper') {
-    process.stdin.removeListener('data', onRawConsoleDataInput);
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    runMediaDownloader(workingDir);
+    const dependencies = ['yt-dlp', 'ffmpeg', 'ffprobe'];
+    
+    const runNextDependencyCheck = (index) => {
+      if (index >= dependencies.length) {
+        process.stdin.removeListener('data', onRawConsoleDataInput);
+        if (process.stdin.isTTY) process.stdin.setRawMode(false);
+        runMediaDownloader(workingDir);
+        return;
+      }
+      
+      // Default to false (only downloads if missing)
+      verifyAssetDependency(workingDir, dependencies[index], () => {
+        runNextDependencyCheck(index + 1);
+      }, false);
+    };
+
+    runNextDependencyCheck(0);
     return;
   }
 
@@ -107,10 +143,10 @@ function handleSelection(label) {
     console.log("- YT-DLP: Various Coders");
     console.log("");
     console.log("The goal of this project is to provide an easy to use manual for ALL of your charting needs!");
+    console.log("- SonoUtils (the wrapper) is licensed under the Apache 2.0");
     console.log("- Sono-Overlay is under the AGPL");
     console.log("- YT-DLP is under the Unlicense");
-    console.log("- Proseka Faithful is under the Nexint TOS");
-    console.log("- All other coding projects are licensed under the Apache 2.0");
+    console.log("- ProSeka Faithful and Sono-Server is under the Nexint TOS");
     console.log("");
     console.log("Nexint TOS is mentioned here https://nexint.ca/tos");
     returnToMenu();
@@ -130,133 +166,230 @@ function handleSelection(label) {
   }
 
   if (label === 'Launch Sonolus Server') {
-    const startWizard = () => {
-      const wizardPath = path.join(dir, 'install.js');
+    verifyAssetDependency(workingDir, 'sono-server', () => {
+      const startWizard = () => {
+        const wizardPath = path.join(dir, 'install.js');
 
-      executeIsolatedProcess('node', [wizardPath], label, { cwd: dir }, (code) => {
-        returnToMenu();
-      });
-    };
-
-    if (!fs.existsSync(path.join(dir, 'node_modules'))) {
-      console.log(`--- Installing Server Dependencies ---\n`);
-      executeIsolatedProcess('npm', ['install'], 'Server Dependencies (npm install)', { cwd: dir, shell: true }, (code) => {
-        if (code === 0) startWizard();
-        else {
-          console.error('\x1b[31mError: npm install failed. Aborting workspace execution.\x1b[0m\n');
+        executeIsolatedProcess('node', [wizardPath], label, { cwd: dir }, (code) => {
           returnToMenu();
-        }
-      });
-    } else {
-      startWizard();
-    }
+        });
+      };
+
+      if (!fs.existsSync(path.join(dir, 'node_modules'))) {
+        console.log(`--- Installing Server Dependencies ---\n`);
+        executeIsolatedProcess('npm', ['install'], 'Server Dependencies (npm install)', { cwd: dir, shell: true }, (code) => {
+          if (code === 0) startWizard();
+          else {
+            console.error('\x1b[31mError: npm install failed. Aborting workspace execution.\x1b[0m\n');
+            returnToMenu();
+          }
+        });
+      } else {
+        startWizard();
+      }
+    }, false);
+    return;
   } else if (label === 'Launch Sono-Overlay') {
     const overlayDir = path.join(workingDir, 'Sono-Overlay');
-    const overlayPath = path.join(overlayDir, 'sono-overlay.exe');
+    const binaryName = process.platform === 'win32' ? 'sono-overlay.exe' : 'sono-overlay';
+    const overlayPath = path.join(overlayDir, binaryName);
 
-    // If it already exists locally, execute it directly
-    if (fs.existsSync(overlayPath)) {
+    // Call the dynamic loader passing false so it runs instantly if present
+    verifyAssetDependency(workingDir, 'sono-overlay', () => {
       startSonoOverlayProcess(overlayDir, overlayPath);
-      return;
-    }
+    }, false);
+    return;
+  }
+}
 
-    console.log(`\x1b[33m[Notice]: Sono-Overlay binary missing. Checking GitHub for the latest release...\x1b[0m\n`);
-    
-    // Ensure clean directory structure setup
-    try {
-      fs.mkdirSync(overlayDir, { recursive: true });
-    } catch (dirErr) {
-      console.error(`\x1b[31m[System Error]: Failed to create directory: ${dirErr.message}\x1b[0m\n`);
-      returnToMenu();
-      return;
-    }
-
-    const tempZipPath = path.join(overlayDir, 'sono-overlay-temp.zip');
-
-    // Request options for the GitHub API to fetch the latest release tag name
-    const apiOptions = {
-      hostname: 'api.github.com',
-      path: '/repos/Nexints/Sono-Overlay/releases/latest',
-      headers: { 'User-Agent': 'SonoUtils-Launcher-NodeJS' }
-    };
-
-    https.get(apiOptions, (res) => {
-      let data = '';
-      
-      // Handle non-200 HTTP statuses from GitHub API (e.g., 403 Rate Limited, 404 Not Found)
-      if (res.statusCode !== 200) {
-        console.error(`\x1b[31mGitHub API Error: Server responded with status ${res.statusCode}\x1b[0m`);
-        if (res.statusCode === 403) {
-          console.error(`\x1b[33mTip: You may have run into GitHub API rate limits. Please try again later.\x1b[0m\n`);
+// Hardened, production-ready configuration dependency router
+function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownload = false) {
+  const addonsDir = path.join(workingDir, 'addons');
+  const overlayDir = path.join(workingDir, 'Sono-Overlay');
+  const serverDir = path.join(workingDir, 'server');
+  const isWin = process.platform === 'win32';
+  
+  const ASSET_MANIFESTS = {
+    'sono-server': {
+      repo: 'Nexints/Sono-Server',
+      binary: 'install.js',
+      targetDir: serverDir,
+      getPattern: () => '.zip',
+      extract: (tmp, dest) => {
+        console.log(`Extraction in progress...`);
+        if (isWin) {
+          execSync(`powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${serverDir}' -Force"`);
+        } else {
+          try {
+            execSync(`unzip -v`, { stdio: 'ignore' });
+            execSync(`unzip -o "${tmp}" -d "${serverDir}"`);
+          } catch (e) {
+            throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
+          }
         }
-        returnToMenu();
-        return;
       }
-
-      res.on('data', (chunk) => { data += chunk; });
-      
-      res.on('end', () => {
-        try {
-          // Safeguard: Attempt to parse incoming payload data string
-          const releaseInfo = JSON.parse(data);
-          const latestTag = releaseInfo.tag_name;
-
-          if (!latestTag) {
-            throw new Error("Could not find a valid release tag in the GitHub response.");
+    },
+    'sono-overlay': {
+      repo: 'Nexints/Sono-Overlay',
+      binary: isWin ? 'sono-overlay.exe' : 'sono-overlay',
+      targetDir: overlayDir,
+      getPattern: () => '.zip',
+      extract: (tmp, dest) => {
+        console.log(`Extraction in progress...`);
+        if (isWin) {
+          execSync(`powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${overlayDir}' -Force"`);
+        } else {
+          // Safeguard: Verify system zip capability before spawning process loops
+          try {
+            execSync(`unzip -v`, { stdio: 'ignore' });
+            execSync(`unzip -o "${tmp}" -d "${overlayDir}"`);
+          } catch (e) {
+            throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
           }
-
-          // Safeguard: Verify asset payload architecture exists and contains target packages
-          if (!releaseInfo.assets || releaseInfo.assets.length === 0) {
-            throw new Error("The latest GitHub release exists, but contains no downloadable assets.");
-          }
-
-          const downloadUrl = releaseInfo.assets[0].browser_download_url;
-          if (!downloadUrl) {
-            throw new Error("Target download URL missing from release metadata properties.");
-          }
-
-          console.log(`Downloading latest version (${latestTag})...`);
-          console.log(`Source: ${downloadUrl}`);
-
-          downloadFile(downloadUrl, tempZipPath, (err) => {
-            if (err) {
-              console.error(`\x1b[31mDownload failed: ${err.message}\x1b[0m\n`);
-              // Clean up potentially corrupted half-downloaded zip structures
-              if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
-              returnToMenu();
-              return;
-            }
-
-            console.log(`Extraction in progress...`);
-            try {
-              if (process.platform === 'win32') {
-                execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${overlayDir}' -Force"`);
-              } else {
-                execSync(`unzip -o "${tempZipPath}" -d "${overlayDir}"`);
-              }
-              
-              // Clean up zip structure upon successful file extraction pass
-              if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
-              console.log(`\x1b[32mDownload complete!\x1b[0m\n`);
-              
-              startSonoOverlayProcess(overlayDir, overlayPath);
-            } catch (extractErr) {
-              console.error(`\x1b[31mExtraction error: ${extractErr.message}\x1b[0m`);
-              console.error(`\x1b[33mEnsure dependencies like 'unzip' are available on non-Windows platforms.\x1b[0m\n`);
-              if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
-              returnToMenu();
-            }
-          });
-
-        } catch (parseOrValidationErr) {
-          console.error(`\x1b[31mValidation Error: ${parseOrValidationErr.message}\x1b[0m\n`);
-          returnToMenu();
         }
-      });
-    }).on('error', (apiErr) => {
-      console.error(`\x1b[31mNetwork Error while reaching GitHub: ${apiErr.message}\x1b[0m\n`);
+      }
+    },
+    'yt-dlp': {
+      repo: 'yt-dlp/yt-dlp',
+      binary: isWin ? 'yt-dlp.exe' : 'yt-dlp',
+      targetDir: addonsDir,
+      getPattern: (bin) => bin,
+      extract: (tmp, dest) => {
+        if (fs.existsSync(dest)) fs.unlinkSync(dest);
+        fs.renameSync(tmp, dest);
+      }
+    },
+    'ffmpeg': {
+      repo: 'yt-dlp/FFmpeg-Builds',
+      binary: isWin ? 'ffmpeg.exe' : 'ffmpeg',
+      targetDir: addonsDir,
+      getPattern: () => isWin ? 'ffmpeg-master-latest-win64-gpl.zip' : (process.platform === 'linux' ? 'ffmpeg-master-latest-linux64-gpl.tar.xz' : 'ffmpeg-master-latest-macos64-gpl.tar.xz'),
+      extract: (tmp, dest, bin) => extractArchivedSubcomponent(tmp, addonsDir, dest, bin, 'ffmpeg')
+    },
+    'ffprobe': {
+      repo: 'yt-dlp/FFmpeg-Builds',
+      binary: isWin ? 'ffprobe.exe' : 'ffprobe',
+      targetDir: addonsDir,
+      getPattern: () => isWin ? 'ffmpeg-master-latest-win64-gpl.zip' : (process.platform === 'linux' ? 'ffmpeg-master-latest-linux64-gpl.tar.xz' : 'ffmpeg-master-latest-macos64-gpl.tar.xz'),
+      extract: (tmp, dest, bin) => extractArchivedSubcomponent(tmp, addonsDir, dest, bin, 'ffprobe')
+    }
+  };
+
+  const manifest = ASSET_MANIFESTS[assetKey];
+  const targetPath = path.join(manifest.targetDir, manifest.binary);
+
+  if (fs.existsSync(targetPath) && !forceDownload) {
+    onReadyCallback();
+    return;
+  }
+
+  console.log(`\x1b[33m[Notice]: ${forceDownload ? 'Updating' : 'Missing'} ${assetKey.toUpperCase()} component. Reaching GitHub API...\x1b[0m\n`);
+  try { fs.mkdirSync(manifest.targetDir, { recursive: true }); } catch (e) {}
+
+  const searchPattern = manifest.getPattern(manifest.binary);
+  
+  const apiOptions = {
+    hostname: 'api.github.com',
+    path: `/repos/${manifest.repo}/releases/latest`,
+    headers: { 
+      'User-Agent': 'SonoUtils-Launcher-Client-v1',
+      'Accept': 'application/vnd.github.v3+json'
+    }
+  };
+
+  https.get(apiOptions, (res) => {
+    let data = '';
+
+    // SAFE RATE-LIMIT TRAP: Clean error catching for API exhaustion
+    if (res.statusCode === 403) {
+      console.error(`\x1b[31m[API Error]: GitHub API Rate Limit Exceeded (403 Forbidden).\x1b[0m`);
+      console.error(`\x1b[33mUnauthenticated requests are limited to 60/hr. Please wait or place binaries manually.\x1b[0m\n`);
       returnToMenu();
+      return;
+    }
+
+    if (res.statusCode !== 200) {
+      console.error(`\x1b[31mGitHub API Error: Server responded with status ${res.statusCode} checking ${assetKey}\x1b[0m\n`);
+      returnToMenu();
+      return;
+    }
+
+    res.on('data', (chunk) => data += chunk);
+    res.on('end', () => {
+      try {
+        const releaseInfo = JSON.parse(data);
+        if (!releaseInfo.assets || !Array.isArray(releaseInfo.assets)) throw new Error("Invalid or empty asset array schema returned by API.");
+
+        const targetAsset = releaseInfo.assets.find(asset => asset && asset.name && (asset.name.toLowerCase().includes(searchPattern.toLowerCase()) || asset.name === searchPattern));
+
+        // SAFE VALUE GUARD: Prevent script crash if search returns null/undefined
+        if (!targetAsset || !targetAsset.name) {
+          throw new Error(`Could not locate a valid compiled binary payload matching pattern string: "${searchPattern}"`);
+        }
+
+        const assetExtension = path.extname(targetAsset.name);
+        const tempPath = path.join(manifest.targetDir, `${assetKey}-temp${assetExtension || (isWin ? '.exe' : '')}`);
+
+        console.log(`Downloading latest ${assetKey.toUpperCase()} build (${releaseInfo.tag_name || 'Latest'})...`);
+        downloadFile(targetAsset.browser_download_url, tempPath, (err) => {
+          if (err) {
+            console.error(`\x1b[31m${assetKey.toUpperCase()} download sequence failed: ${err.message}\x1b[0m\n`);
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            returnToMenu();
+            return;
+          }
+
+          try {
+            manifest.extract(tempPath, targetPath, manifest.binary);
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            
+            console.log(`\x1b[32m${assetKey.toUpperCase()} subsystem verified successfully!\x1b[0m\n`);
+            if (process.platform !== 'win32') {
+              try { fs.chmodSync(targetPath, '755'); } catch (e) {}
+            }
+            onReadyCallback();
+          } catch (exErr) {
+            console.error(`\x1b[31mExtraction engine failure mapping ${assetKey.toUpperCase()}: ${exErr.message}\x1b[0m\n`);
+            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            returnToMenu();
+          }
+        });
+      } catch (validationErr) {
+        console.error(`\x1b[31mValidation processing error: ${validationErr.message}\x1b[0m\n`);
+        returnToMenu();
+      }
     });
+  }).on('error', (apiErr) => {
+    console.error(`\x1b[31mNetwork connection fault checking ${assetKey}: ${apiErr.message}\x1b[0m\n`);
+    returnToMenu();
+  });
+}
+
+function extractArchivedSubcomponent(archivePath, addonsDir, targetFilePath, targetBinaryName, targetSubdirName) {
+  console.log(`Extraction in progress...`);
+  try {
+    if (process.platform === 'win32') {
+      const extractDir = path.join(addonsDir, `${targetSubdirName}-extracted`);
+      execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${extractDir}' -Force"`);
+      
+      const sourceBinary = path.join(extractDir, 'ffmpeg-master-latest-win64-gpl', 'bin', targetBinaryName);
+      if (!fs.existsSync(sourceBinary)) throw new Error(`Target subcomponent file not found inside unpacked source archive path tree.`);
+      
+      if (fs.existsSync(targetFilePath)) fs.unlinkSync(targetFilePath);
+      fs.renameSync(sourceBinary, targetFilePath);
+      fs.rmSync(extractDir, { recursive: true, force: true });
+    } else {
+      // Safeguard: Check system tar capability before trying to untar packages blindly
+      try {
+        execSync(`tar --version`, { stdio: 'ignore' });
+        if (fs.existsSync(targetFilePath)) fs.unlinkSync(targetFilePath);
+        execSync(`tar -xf "${archivePath}" -C "${addonsDir}" --strip-components=2 "*/bin/${targetSubdirName}"`);
+      } catch (e) {
+        throw new Error("Missing system dependency: 'tar' utility is required on this system profile.");
+      }
+    }
+  } catch (err) {
+    throw new Error(`Archive utility execution failure: ${err.message}`);
   }
 }
 
@@ -264,10 +397,13 @@ function runMediaDownloader(workingDir) {
   const addons = path.join(workingDir, 'addons'), dist = path.join(workingDir, 'dist', 'downloads');
   fs.mkdirSync(dist, { recursive: true });
 
+  const binaryName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   rl.question('Enter video URL (or type "exit"):\n> ', (url) => {
     if (url.trim().toLowerCase() === 'exit' || !url.trim()) {
       rl.close();
+      process.stdin.resume();
       initMenuInputEngine();
       renderMenu();
       return;
@@ -278,8 +414,7 @@ function runMediaDownloader(workingDir) {
 
       rl.close();
 
-      executeIsolatedProcess(path.join(addons, 'yt-dlp.exe'), args, 'YT-DLP Subsystem', {}, () => {
-        // FIXED: Routed Option 3 here to land uniformly on the interactive menu confirmation loop
+      executeIsolatedProcess(path.join(addons, binaryName), args, 'YT-DLP Subsystem', {}, () => {
         process.stdin.resume();
         returnToMenu();
       });
@@ -421,5 +556,25 @@ function returnToMenu() {
   }, 100);
 }
 
+// Automatically scrubs loose, half-downloaded or corrupted temp files from previous sessions
+function cleanTrailingDebris(workingDir) {
+  const targets = [path.join(workingDir, 'addons'), path.join(workingDir, 'Sono-Overlay'), path.join(workingDir, 'server')];
+  
+  targets.forEach(dir => {
+    try {
+      if (!fs.existsSync(dir)) return;
+      const files = fs.readdirSync(dir);
+      files.forEach(file => {
+        if (file.includes('-temp')) {
+          const brokenFilePath = path.join(dir, file);
+          fs.unlinkSync(brokenFilePath);
+        }
+      });
+    } catch (e) { /* Fail silently during initial workspace load setups */ }
+  });
+}
+
+// Global execution hooks
+cleanTrailingDebris(process.pkg ? path.dirname(process.execPath) : __dirname);
 initMenuInputEngine();
 renderMenu();

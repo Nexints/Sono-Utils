@@ -3,9 +3,11 @@
 This program launches a bunch of utilities for the game Sonolus.
 
 SonoUtils contains:
-- Sono-Overlay
-- Custom Sonolus Server
-- YT-DLP support (read the readme.md inside of /addons)
+- Sono-Overlay (On the fly)
+- Custom Sonolus Server (On the fly)
+- YT-DLP support (On the fly)
+
+WARN: Everything in this program is downloaded on the fly on first startup.
 
 ## Workflow
 
@@ -40,7 +42,7 @@ Sono-Utils:
 
 ## Legal:
 The included ProSeka Faithful UI is governed under my [Nexint TOS](https://nexint.ca/tos).
-While the whole program is under the Apache 2.0 License (internally it says Nexint TOS, feel free to ignore that), parts of this program are under the AGPL.
+While the whole wrapper is under the Apache 2.0 License, parts of this program are under the AGPL and parts are under my Nexint TOS.
 
 This program remains compliant by ensuring that this program does not rely on AGPL code. This code is mere aggregation of AGPL code.
 
