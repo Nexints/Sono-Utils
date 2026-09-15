@@ -123,8 +123,9 @@ function handleSelection(label) {
     console.log("- and I aim to use AI responsibly.");
     console.log("");
     console.log("This project remains compliant with the AGPL by acting as a mere aggregator.");
-    console.log("The main SonoUtils only acts as a launcher for various indepent applets.");
-    console.log("Have fun when using this tool! There are no blacklists, and this tool remains open source.");
+    console.log("SonoUtils only acts as a launcher for various independent applets.");
+    console.log("Sono-Overlay (AGPL) is downloaded on the fly.")
+    console.log("Have fun when using this tool! This tool remains fully open source, so you can audit the tool yourself.");
     returnToMenu();
   }
 
