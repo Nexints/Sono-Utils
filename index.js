@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { release } = require('os');
+const ver = "1.0.1"
 
 const MENU_ITEMS = [
   'Launch Sonolus Server',
@@ -530,7 +531,7 @@ function startSonoOverlayProcess(overlayDir, overlayPath) {
 
 function renderMenu() {
   process.stdout.write('\x1b[2J\x1b[0;0H');
-  console.log('--- \x1b[96mSono \x1b[95mUtils \x1b[0m(v1.0.0) ---\n(Use Arrow Keys, Press Enter to Select)\n');
+  console.log(`--- \x1b[96mSono \x1b[95mUtils \x1b[0m(v${ver}) ---\n(Use Arrow Keys, Press Enter to Select)\n`);
   MENU_ITEMS.forEach((item, idx) => {
     if (idx == selectedIndex) {
       console.log(`\x1b[32m > [ ${item} ] \x1b[0m`)

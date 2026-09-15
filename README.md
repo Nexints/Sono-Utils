@@ -2,12 +2,19 @@
 
 This program launches a bunch of utilities for the game Sonolus.
 
-SonoUtils contains:
-- Sono-Overlay (On the fly)
-- Custom Sonolus Server (On the fly)
-- YT-DLP support (On the fly)
+> [!NOTE]
+> All applets are downloaded on the fly for first run.
+>
+> These applets do not auto update. You need to manually update everything.
+>
+> All assets are made by myself.
 
-WARN: Everything in this program is downloaded on the fly on first startup.
+SonoUtils contains:
+- Sono-Overlay
+- Sono-Server
+- YT-DLP
+
+All in one program!
 
 ## Workflow
 
@@ -32,6 +39,7 @@ This tool should speed up testing by orders of magnitude!
 ```
 Sono-Utils:
 - Made by Nexint (https://nexint.ca/)
+- Depends on other projects
 - https://github.com/Nexints/SonoUtils
 ```
 
