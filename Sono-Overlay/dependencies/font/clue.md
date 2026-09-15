@@ -1,2 +1,0 @@
-FOT-ロダンNTLG Pro EB
-FOT-ロダンNTLG Pro DB

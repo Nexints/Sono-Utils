@@ -5,10 +5,12 @@ This program is simply a wrapper that makes calling Sono-Overlay easier for the 
 as well as unifies all Sonolus utilities into one megapackage.
 */
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+const { release } = require('os');
 
 const MENU_ITEMS = [
   'Launch Sonolus Server',
@@ -147,51 +149,80 @@ function handleSelection(label) {
     } else {
       startWizard();
     }
-
   } else if (label === 'Launch Sono-Overlay') {
-
-    // Fully release the parent's control over the terminal keyboard channel
-    process.stdin.removeListener('data', onRawConsoleDataInput);
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false); // Drop parent raw state
-    }
-    process.stdin.pause();
-
     const overlayDir = path.join(workingDir, 'Sono-Overlay');
     const overlayPath = path.join(overlayDir, 'sono-overlay.exe');
-    
+
+    // Download the latest version
     if (!fs.existsSync(overlayPath)) {
-      console.clear();
-      console.log(`\x1b[31m--- [Feature Restricted] ---\x1b[0m\n`);
-      console.log("Sono-Overlay is not found in your directory footprint.");
-      console.log("To use this feature, download the AGPL-licensed binary into /Sono-Overlay.\n");
-      returnToMenu();
-      return;
+      console.log(`\x1b[33m[Notice]: Sono-Overlay binary missing. Checking GitHub for the latest release...\x1b[0m\n`);
+      
+      fs.mkdirSync(overlayDir, { recursive: true });
+      const tempZipPath = path.join(overlayDir, 'sono-overlay-temp.zip');
+
+      // Request options for the GitHub API to fetch the latest release tag name
+      const apiOptions = {
+        hostname: 'api.github.com',
+        path: '/repos/Nexints/Sono-Overlay/releases/latest',
+        headers: { 'User-Agent': 'SonoUtils-Launcher-NodeJS' }
+      };
+
+      https.get(apiOptions, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+            const releaseInfo = JSON.parse(data);
+            const latestTag = releaseInfo.tag_name;
+
+            if (!latestTag) {
+              throw new Error("Could not parse the latest release tag from GitHub.");
+            }
+
+            // Download the first asset (a zip file)
+            const downloadUrl = releaseInfo.assets[0].browser_download_url;
+            console.log(`Downloading latest version (${latestTag})...`);
+            console.log(downloadUrl)
+
+            downloadFile(downloadUrl, tempZipPath, (err) => {
+              if (err) {
+                console.error(`\x1b[31mDownload failed: ${err.message}\x1b[0m\n`);
+                returnToMenu();
+                return;
+              }
+
+              console.log(`Extraction in progress...`);
+              try {
+                if (process.platform === 'win32') {
+                  execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${overlayDir}' -Force"`);
+                } else {
+                  execSync(`unzip -o "${tempZipPath}" -d "${overlayDir}"`);
+                }
+                
+                fs.unlinkSync(tempZipPath);
+                console.log(`\x1b[32mDownload complete!\x1b[0m\n`);
+                
+                startSonoOverlayProcess(overlayDir, overlayPath);
+              } catch (extractErr) {
+                console.error(`\x1b[31mExtraction error: ${extractErr.message}\x1b[0m\n`);
+                returnToMenu();
+              }
+            });
+
+          } catch (apiErr) {
+            console.error(`\x1b[31mGitHub API Error: ${apiErr.message}\x1b[0m\n`);
+            returnToMenu();
+          }
+        });
+      }).on('error', (apiErr) => {
+        console.error(`\x1b[31mNetwork Error while reaching GitHub: ${apiErr.message}\x1b[0m\n`);
+        returnToMenu();
+      });
+
+    } else {
+      // If it already exists locally, execute it directly
+      startSonoOverlayProcess(overlayDir, overlayPath);
     }
-
-    console.log(`--- Starting Sono-Overlay ---\n`);
-
-    // Spawn with absolute 'inherit'. Sono-Overlay now directly communicates 
-    // with the physical Windows terminal handle, allowing its internal Go packages
-    // (rawmode / gokilo) to capture your typing perfectly with 0 lag or locks.
-    const overlayProcess = spawn(overlayPath, [], {
-      cwd: overlayDir,
-      stdio: 'inherit'
-    });
-
-    overlayProcess.on('close', (code) => {
-      console.log(`\n👋 Sono-Overlay completed or closed (Code: ${code}).`);
-
-      // Fully re-engage our binary keyboard listening engine when it returns
-      initMenuInputEngine();
-      returnToMenu();
-    });
-
-    overlayProcess.on('error', (err) => {
-      console.error(`\x1b[31m[Spawn Error]: ${err.message}\x1b[0m\n`);
-      initMenuInputEngine();
-      returnToMenu();
-    });
   }
 }
 
@@ -219,6 +250,112 @@ function runMediaDownloader(workingDir) {
         returnToMenu();
       });
     });
+  });
+}
+
+// Helper function to handle the on-the-fly zip download safely with a progress bar
+function downloadFile(url, dest, callback) {
+  const file = fs.createWriteStream(dest);
+  const parsedUrl = new URL(url);
+  const requestOptions = {
+    hostname: parsedUrl.hostname,
+    path: parsedUrl.pathname + parsedUrl.search,
+    headers: { 'User-Agent': 'SonoUtils-Launcher-NodeJS' }
+  };
+
+  https.get(requestOptions, (response) => {
+    // Safely forward down both relative and absolute redirect rules
+    if (response.statusCode === 302 || response.statusCode === 301) {
+      let redirectUrl = response.headers.location;
+      
+      if (!redirectUrl.startsWith('http://') && !redirectUrl.startsWith('https://')) {
+        redirectUrl = new URL(redirectUrl, 'https://github.com').href;
+      }
+      
+      file.close(() => {
+        fs.unlink(dest, () => {
+          downloadFile(redirectUrl, dest, callback); // Recursively loop
+        });
+      });
+      return;
+    }
+
+    // STRICT ERROR CHECKING: Abort extraction sequence if the response isn't a success code
+    if (response.statusCode !== 200) {
+      file.close(() => {
+        fs.unlink(dest, () => {
+          callback(new Error(`Server responded with status code: ${response.statusCode}`));
+        });
+      });
+      return;
+    }
+
+    // Progress Bar Variables
+    const totalBytes = parseInt(response.headers['content-length'], 10);
+    let receivedBytes = 0;
+
+    response.on('data', (chunk) => {
+      receivedBytes += chunk.length;
+      
+      if (totalBytes) {
+        const percentage = ((receivedBytes / totalBytes) * 100).toFixed(1);
+        const barWidth = 30;
+        const filledWidth = Math.round((receivedBytes / totalBytes) * barWidth);
+        const emptyWidth = barWidth - filledWidth;
+        
+        const progressBar = '█'.repeat(filledWidth) + '░'.repeat(emptyWidth);
+        const currentMB = (receivedBytes / (1024 * 1024)).toFixed(2);
+        const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+
+        // Clear current terminal line and write the visual progress bar status
+        readline.clearLine(process.stdout, 0);
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write(`📥 Downloading: [${progressBar}] ${percentage}% (${currentMB} / ${totalMB} MB)`);
+      } else {
+        // Fallback layout context status loop if the asset server drops Content-Length headers
+        readline.clearLine(process.stdout, 0);
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write(`📥 Downloading: ${(receivedBytes / (1024 * 1024)).toFixed(2)} MB received...`);
+      }
+    });
+
+    response.pipe(file);
+    
+    file.on('finish', () => {
+      process.stdout.write('\n\n'); // Append clean breaking line structure upon loop exit completion
+      file.close(callback);
+    });
+  }).on('error', (err) => {
+    fs.unlink(dest, () => {});
+    callback(err);
+  });
+}
+
+// Helper function to launch Sono-Overlay once downloaded/extracted
+function startSonoOverlayProcess(overlayDir, overlayPath) {
+  process.stdin.removeListener('data', onRawConsoleDataInput);
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(false); 
+  }
+  process.stdin.pause();
+
+  console.log(`--- Starting Sono-Overlay ---\n`);
+
+  const overlayProcess = spawn(overlayPath, [], {
+    cwd: overlayDir,
+    stdio: 'inherit'
+  });
+
+  overlayProcess.on('close', (code) => {
+    console.log(`\n👋 Sono-Overlay completed or closed (Code: ${code}).`);
+    initMenuInputEngine();
+    returnToMenu();
+  });
+
+  overlayProcess.on('error', (err) => {
+    console.error(`\x1b[31m[Spawn Error]: ${err.message}\x1b[0m\n`);
+    initMenuInputEngine();
+    returnToMenu();
   });
 }
 

@@ -154,7 +154,7 @@ server/preview
 server/shared
 
 # Sono-Overlay
-Sono-Overlay/default.ini
+Sono-Overlay/
 sono-utils.exe
 build.zip
 
