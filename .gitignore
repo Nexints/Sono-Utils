@@ -159,4 +159,4 @@ Sono-Overlay/default.ini
 
 # YT-dlp
 addons/*.exe
-.dist/
+dist/
