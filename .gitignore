@@ -143,12 +143,8 @@ vite.config.ts.timestamp-*
 .vite/
 
 # More stuff
-server/banner_pool
-server/engines_pool
-server/levels_pool
 server/node_modules
 server/pack
-server/uploads
 server/source
 server/share
 server/play
@@ -160,3 +156,4 @@ server/shared
 # Sono-Overlay
 Sono-Overlay/default.ini
 addons/*.exe
+.sono-utils.exe
