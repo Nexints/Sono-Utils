@@ -154,76 +154,109 @@ function handleSelection(label) {
     const overlayDir = path.join(workingDir, 'Sono-Overlay');
     const overlayPath = path.join(overlayDir, 'sono-overlay.exe');
 
-    // Download the latest version
-    if (!fs.existsSync(overlayPath)) {
-      console.log(`\x1b[33m[Notice]: Sono-Overlay binary missing. Checking GitHub for the latest release...\x1b[0m\n`);
-      
+    // If it already exists locally, execute it directly
+    if (fs.existsSync(overlayPath)) {
+      startSonoOverlayProcess(overlayDir, overlayPath);
+      return;
+    }
+
+    console.log(`\x1b[33m[Notice]: Sono-Overlay binary missing. Checking GitHub for the latest release...\x1b[0m\n`);
+    
+    // Ensure clean directory structure setup
+    try {
       fs.mkdirSync(overlayDir, { recursive: true });
-      const tempZipPath = path.join(overlayDir, 'sono-overlay-temp.zip');
+    } catch (dirErr) {
+      console.error(`\x1b[31m[System Error]: Failed to create directory: ${dirErr.message}\x1b[0m\n`);
+      returnToMenu();
+      return;
+    }
 
-      // Request options for the GitHub API to fetch the latest release tag name
-      const apiOptions = {
-        hostname: 'api.github.com',
-        path: '/repos/Nexints/Sono-Overlay/releases/latest',
-        headers: { 'User-Agent': 'SonoUtils-Launcher-NodeJS' }
-      };
+    const tempZipPath = path.join(overlayDir, 'sono-overlay-temp.zip');
 
-      https.get(apiOptions, (res) => {
-        let data = '';
-        res.on('data', (chunk) => data += chunk);
-        res.on('end', () => {
-          try {
-            const releaseInfo = JSON.parse(data);
-            const latestTag = releaseInfo.tag_name;
+    // Request options for the GitHub API to fetch the latest release tag name
+    const apiOptions = {
+      hostname: 'api.github.com',
+      path: '/repos/Nexints/Sono-Overlay/releases/latest',
+      headers: { 'User-Agent': 'SonoUtils-Launcher-NodeJS' }
+    };
 
-            if (!latestTag) {
-              throw new Error("Could not parse the latest release tag from GitHub.");
+    https.get(apiOptions, (res) => {
+      let data = '';
+      
+      // Handle non-200 HTTP statuses from GitHub API (e.g., 403 Rate Limited, 404 Not Found)
+      if (res.statusCode !== 200) {
+        console.error(`\x1b[31mGitHub API Error: Server responded with status ${res.statusCode}\x1b[0m`);
+        if (res.statusCode === 403) {
+          console.error(`\x1b[33mTip: You may have run into GitHub API rate limits. Please try again later.\x1b[0m\n`);
+        }
+        returnToMenu();
+        return;
+      }
+
+      res.on('data', (chunk) => { data += chunk; });
+      
+      res.on('end', () => {
+        try {
+          // Safeguard: Attempt to parse incoming payload data string
+          const releaseInfo = JSON.parse(data);
+          const latestTag = releaseInfo.tag_name;
+
+          if (!latestTag) {
+            throw new Error("Could not find a valid release tag in the GitHub response.");
+          }
+
+          // Safeguard: Verify asset payload architecture exists and contains target packages
+          if (!releaseInfo.assets || releaseInfo.assets.length === 0) {
+            throw new Error("The latest GitHub release exists, but contains no downloadable assets.");
+          }
+
+          const downloadUrl = releaseInfo.assets[0].browser_download_url;
+          if (!downloadUrl) {
+            throw new Error("Target download URL missing from release metadata properties.");
+          }
+
+          console.log(`Downloading latest version (${latestTag})...`);
+          console.log(`Source: ${downloadUrl}`);
+
+          downloadFile(downloadUrl, tempZipPath, (err) => {
+            if (err) {
+              console.error(`\x1b[31mDownload failed: ${err.message}\x1b[0m\n`);
+              // Clean up potentially corrupted half-downloaded zip structures
+              if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
+              returnToMenu();
+              return;
             }
 
-            // Download the first asset (a zip file)
-            const downloadUrl = releaseInfo.assets[0].browser_download_url;
-            console.log(`Downloading latest version (${latestTag})...`);
-            console.log(downloadUrl)
-
-            downloadFile(downloadUrl, tempZipPath, (err) => {
-              if (err) {
-                console.error(`\x1b[31mDownload failed: ${err.message}\x1b[0m\n`);
-                returnToMenu();
-                return;
+            console.log(`Extraction in progress...`);
+            try {
+              if (process.platform === 'win32') {
+                execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${overlayDir}' -Force"`);
+              } else {
+                execSync(`unzip -o "${tempZipPath}" -d "${overlayDir}"`);
               }
+              
+              // Clean up zip structure upon successful file extraction pass
+              if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
+              console.log(`\x1b[32mDownload complete!\x1b[0m\n`);
+              
+              startSonoOverlayProcess(overlayDir, overlayPath);
+            } catch (extractErr) {
+              console.error(`\x1b[31mExtraction error: ${extractErr.message}\x1b[0m`);
+              console.error(`\x1b[33mEnsure dependencies like 'unzip' are available on non-Windows platforms.\x1b[0m\n`);
+              if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath);
+              returnToMenu();
+            }
+          });
 
-              console.log(`Extraction in progress...`);
-              try {
-                if (process.platform === 'win32') {
-                  execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${overlayDir}' -Force"`);
-                } else {
-                  execSync(`unzip -o "${tempZipPath}" -d "${overlayDir}"`);
-                }
-                
-                fs.unlinkSync(tempZipPath);
-                console.log(`\x1b[32mDownload complete!\x1b[0m\n`);
-                
-                startSonoOverlayProcess(overlayDir, overlayPath);
-              } catch (extractErr) {
-                console.error(`\x1b[31mExtraction error: ${extractErr.message}\x1b[0m\n`);
-                returnToMenu();
-              }
-            });
-
-          } catch (apiErr) {
-            console.error(`\x1b[31mGitHub API Error: ${apiErr.message}\x1b[0m\n`);
-            returnToMenu();
-          }
-        });
-      }).on('error', (apiErr) => {
-        console.error(`\x1b[31mNetwork Error while reaching GitHub: ${apiErr.message}\x1b[0m\n`);
-        returnToMenu();
+        } catch (parseOrValidationErr) {
+          console.error(`\x1b[31mValidation Error: ${parseOrValidationErr.message}\x1b[0m\n`);
+          returnToMenu();
+        }
       });
-
-    } else {
-      // If it already exists locally, execute it directly
-      startSonoOverlayProcess(overlayDir, overlayPath);
-    }
+    }).on('error', (apiErr) => {
+      console.error(`\x1b[31mNetwork Error while reaching GitHub: ${apiErr.message}\x1b[0m\n`);
+      returnToMenu();
+    });
   }
 }
 

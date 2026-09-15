@@ -44,7 +44,7 @@ While the whole program is under the Apache 2.0 License (internally it says Nexi
 
 This program remains compliant by ensuring that this program does not rely on AGPL code. This code is mere aggregation of AGPL code.
 
-To show this, Sono-Overlay is downloaded on the fly when the user runs the program, and is NOT bundled.
+To show this, Sono-Overlay is downloaded on the fly when the user runs the program, and is NOT bundled into the program.
 
 Please check the [Nexint TOS](https://nexint.ca/tos) when using this tool with ProSeka Faithful!
 
