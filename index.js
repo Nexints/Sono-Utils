@@ -199,6 +199,7 @@ function runMediaDownloader(workingDir) {
 
       executeIsolatedProcess(path.join(addons, 'yt-dlp.exe'), args, 'YT-DLP Subsystem', {}, () => {
         // FIXED: Routed Option 3 here to land uniformly on the interactive menu confirmation loop
+        process.stdin.resume();
         returnToMenu();
       });
     });
