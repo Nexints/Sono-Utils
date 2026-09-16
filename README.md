@@ -40,7 +40,7 @@ This tool should speed up testing by orders of magnitude!
 Sono-Utils:
 - Made by Nexint (https://nexint.ca/)
 - Depends on other projects
-- https://github.com/Nexints/SonoUtils
+- https://github.com/Nexints/Sono-Utils
 ```
 
 2. This tool **should not be used for malicious purposes** (such as, but not limited to: spreading misinformation on social media).
