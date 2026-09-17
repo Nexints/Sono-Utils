@@ -5,18 +5,20 @@ This program is simply a wrapper that makes calling Sono-Overlay easier for the 
 as well as unifies all Sonolus utilities into one megapackage.
 */
 
-const { spawn, execSync } = require('child_process');
+const { spawn, execSync, exec } = require('child_process');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { release } = require('os');
-const ver = "1.0.1"
+const ver = "1.0.2"
 
 const MENU_ITEMS = [
   'Launch Sonolus Server',
   'Launch Sono-Overlay',
+  'Launch Sekai-Overlay',
   'Launch YT-DLP wrapper',
+  'Launch Sono-AviUtl',
   'Update All Subsystems', // Added Update Option
   'Credits',
   'Disclaimers',
@@ -96,7 +98,7 @@ function handleSelection(label) {
 
   if (label === 'Exit Launcher') process.exit(0);
   if (label === 'Update All Subsystems') {
-    const allTools = ['sono-server', 'sono-overlay', 'yt-dlp', 'ffmpeg', 'ffprobe'];
+    const allTools = ['sono-server', 'sono-overlay', 'yt-dlp', 'ffmpeg', 'ffprobe', 'sekai-overlay'];
     console.log(`\x1b[95m--- Initializing Global System Update Loop ---\x1b[0m\n`);
 
     const triggerSequentialUpdate = (index) => {
@@ -117,7 +119,7 @@ function handleSelection(label) {
 
   if (label === 'Launch YT-DLP wrapper') {
     const dependencies = ['yt-dlp', 'ffmpeg', 'ffprobe'];
-    
+
     const runNextDependencyCheck = (index) => {
       if (index >= dependencies.length) {
         process.stdin.removeListener('data', onRawConsoleDataInput);
@@ -125,7 +127,7 @@ function handleSelection(label) {
         runMediaDownloader(workingDir);
         return;
       }
-      
+
       // Default to false (only downloads if missing)
       verifyAssetDependency(workingDir, dependencies[index], () => {
         runNextDependencyCheck(index + 1);
@@ -145,7 +147,7 @@ function handleSelection(label) {
     console.log("");
     console.log("The goal of this project is to provide an easy to use manual for ALL of your charting needs!");
     console.log("- SonoUtils (the wrapper) is licensed under the Apache 2.0");
-    console.log("- Sono-Overlay is under the AGPL");
+    console.log("- Sono-Overlay and Sekai-Overlay is under the AGPL");
     console.log("- YT-DLP is under the Unlicense");
     console.log("- ProSeka Faithful and Sono-Server is under the Nexint TOS");
     console.log("");
@@ -200,6 +202,26 @@ function handleSelection(label) {
       startSonoOverlayProcess(overlayDir, overlayPath);
     }, false);
     return;
+  } else if (label === 'Launch Sekai-Overlay') {
+    const sekaiOverlayDir = path.join(workingDir, 'Sekai-Overlay');
+    const binaryName = process.platform === 'win32' ? 'sono-overlay.exe' : 'sono-overlay';
+    const overlayPath = path.join(sekaiOverlayDir, binaryName);
+
+    // Call the dynamic loader passing false so it runs instantly if present
+    verifyAssetDependency(workingDir, 'sekai-overlay', () => {
+      startSonoOverlayProcess(sekaiOverlayDir, overlayPath);
+    }, false);
+    return;
+  } else if (label === 'Launch Sono-AviUtl') {
+    const aviutlDir = path.join(workingDir, 'Sono-AviUtl');
+    const binaryName = process.platform === 'win32' ? 'sono-aviutl.exe' : 'sono-aviutl';
+    const overlayPath = path.join(aviutlDir, binaryName);
+
+    // Call the dynamic loader passing false so it runs instantly if present
+    verifyAssetDependency(workingDir, 'sono-aviutl', () => {
+      startSonoOverlayProcess(aviutlDir, overlayPath, true);
+    }, false);
+    return;
   }
 }
 
@@ -207,12 +229,14 @@ function handleSelection(label) {
 function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownload = false) {
   const addonsDir = path.join(workingDir, 'addons');
   const overlayDir = path.join(workingDir, 'Sono-Overlay');
+  const sekaiOverlayDir = path.join(workingDir, 'Sekai-Overlay');
+  const aviutlDir = path.join(workingDir, 'Sono-AviUtl');
   const serverDir = path.join(workingDir, 'server');
   const isWin = process.platform === 'win32';
-  
+
   const ASSET_MANIFESTS = {
     'sono-server': {
-      repo: 'Nexints/Sono-Server',
+      repo: 'Sono-Suite/Sono-Server',
       binary: 'install.js',
       targetDir: serverDir,
       getPattern: () => '.zip',
@@ -231,7 +255,7 @@ function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownl
       }
     },
     'sono-overlay': {
-      repo: 'Nexints/Sono-Overlay',
+      repo: 'Sono-Suite/Sono-Overlay',
       binary: isWin ? 'sono-overlay.exe' : 'sono-overlay',
       targetDir: overlayDir,
       getPattern: () => '.zip',
@@ -244,6 +268,46 @@ function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownl
           try {
             execSync(`unzip -v`, { stdio: 'ignore' });
             execSync(`unzip -o "${tmp}" -d "${overlayDir}"`);
+          } catch (e) {
+            throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
+          }
+        }
+      }
+    },
+    'sekai-overlay': {
+      repo: 'Sono-Suite/Sekai-Overlay',
+      binary: isWin ? 'sono-overlay.exe' : 'sono-overlay',
+      targetDir: sekaiOverlayDir,
+      getPattern: () => '.zip',
+      extract: (tmp, dest) => {
+        console.log(`Extraction in progress...`);
+        if (isWin) {
+          execSync(`powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${sekaiOverlayDir}' -Force"`);
+        } else {
+          // Safeguard: Verify system zip capability before spawning process loops
+          try {
+            execSync(`unzip -v`, { stdio: 'ignore' });
+            execSync(`unzip -o "${tmp}" -d "${sekaiOverlayDir}"`);
+          } catch (e) {
+            throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
+          }
+        }
+      }
+    },
+    'sono-aviutl': {
+      repo: 'Sono-Suite/Sono-AviUtl',
+      binary: isWin ? 'sono-aviutl.exe' : 'sono-aviutl',
+      targetDir: aviutlDir,
+      getPattern: () => '.zip',
+      extract: (tmp, dest) => {
+        console.log(`Extraction in progress...`);
+        if (isWin) {
+          execSync(`powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${aviutlDir}' -Force"`);
+        } else {
+          // Safeguard: Verify system zip capability before spawning process loops
+          try {
+            execSync(`unzip -v`, { stdio: 'ignore' });
+            execSync(`unzip -o "${tmp}" -d "${aviutlDir}"`);
           } catch (e) {
             throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
           }
@@ -285,14 +349,14 @@ function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownl
   }
 
   console.log(`\x1b[33m[Notice]: ${forceDownload ? 'Updating' : 'Missing'} ${assetKey.toUpperCase()} component. Reaching GitHub API...\x1b[0m\n`);
-  try { fs.mkdirSync(manifest.targetDir, { recursive: true }); } catch (e) {}
+  try { fs.mkdirSync(manifest.targetDir, { recursive: true }); } catch (e) { }
 
   const searchPattern = manifest.getPattern(manifest.binary);
-  
+
   const apiOptions = {
     hostname: 'api.github.com',
     path: `/repos/${manifest.repo}/releases/latest`,
-    headers: { 
+    headers: {
       'User-Agent': 'SonoUtils-Launcher-Client-v1',
       'Accept': 'application/vnd.github.v3+json'
     }
@@ -343,10 +407,10 @@ function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownl
           try {
             manifest.extract(tempPath, targetPath, manifest.binary);
             if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            
+
             console.log(`\x1b[32m${assetKey.toUpperCase()} subsystem verified successfully!\x1b[0m\n`);
             if (process.platform !== 'win32') {
-              try { fs.chmodSync(targetPath, '755'); } catch (e) {}
+              try { fs.chmodSync(targetPath, '755'); } catch (e) { }
             }
             onReadyCallback();
           } catch (exErr) {
@@ -372,10 +436,10 @@ function extractArchivedSubcomponent(archivePath, addonsDir, targetFilePath, tar
     if (process.platform === 'win32') {
       const extractDir = path.join(addonsDir, `${targetSubdirName}-extracted`);
       execSync(`powershell -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${extractDir}' -Force"`);
-      
+
       const sourceBinary = path.join(extractDir, 'ffmpeg-master-latest-win64-gpl', 'bin', targetBinaryName);
       if (!fs.existsSync(sourceBinary)) throw new Error(`Target subcomponent file not found inside unpacked source archive path tree.`);
-      
+
       if (fs.existsSync(targetFilePath)) fs.unlinkSync(targetFilePath);
       fs.renameSync(sourceBinary, targetFilePath);
       fs.rmSync(extractDir, { recursive: true, force: true });
@@ -437,11 +501,11 @@ function downloadFile(url, dest, callback) {
     // Safely forward down both relative and absolute redirect rules
     if (response.statusCode === 302 || response.statusCode === 301) {
       let redirectUrl = response.headers.location;
-      
+
       if (!redirectUrl.startsWith('http://') && !redirectUrl.startsWith('https://')) {
         redirectUrl = new URL(redirectUrl, 'https://github.com').href;
       }
-      
+
       file.close(() => {
         fs.unlink(dest, () => {
           downloadFile(redirectUrl, dest, callback); // Recursively loop
@@ -466,13 +530,13 @@ function downloadFile(url, dest, callback) {
 
     response.on('data', (chunk) => {
       receivedBytes += chunk.length;
-      
+
       if (totalBytes) {
         const percentage = ((receivedBytes / totalBytes) * 100).toFixed(1);
         const barWidth = 30;
         const filledWidth = Math.round((receivedBytes / totalBytes) * barWidth);
         const emptyWidth = barWidth - filledWidth;
-        
+
         const progressBar = '█'.repeat(filledWidth) + '░'.repeat(emptyWidth);
         const currentMB = (receivedBytes / (1024 * 1024)).toFixed(2);
         const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
@@ -490,43 +554,73 @@ function downloadFile(url, dest, callback) {
     });
 
     response.pipe(file);
-    
+
     file.on('finish', () => {
       process.stdout.write('\n\n'); // Append clean breaking line structure upon loop exit completion
       file.close(callback);
     });
   }).on('error', (err) => {
-    fs.unlink(dest, () => {});
+    fs.unlink(dest, () => { });
     callback(err);
   });
 }
 
 // Helper function to launch Sono-Overlay once downloaded/extracted
-function startSonoOverlayProcess(overlayDir, overlayPath) {
+function startSonoOverlayProcess(overlayDir, overlayPath, adminNeeded) {
   process.stdin.removeListener('data', onRawConsoleDataInput);
   if (process.stdin.isTTY) {
-    process.stdin.setRawMode(false); 
+    process.stdin.setRawMode(false);
   }
   process.stdin.pause();
 
   console.log(`--- Starting Sono-Overlay ---\n`);
 
-  const overlayProcess = spawn(overlayPath, [], {
-    cwd: overlayDir,
-    stdio: 'inherit'
-  });
+  if (adminNeeded) {
+    const os = require('os'); const platform = os.platform();
 
-  overlayProcess.on('close', (code) => {
-    console.log(`\n👋 Sono-Overlay completed or closed (Code: ${code}).`);
+    try {
+      if (platform === 'win32') {
+        // Windows: Use PowerShell to request elevation
+        // '-Verb RunAs' triggers the UAC prompt
+        const psCommand = `Start-Process "${overlayPath}" -WorkingDirectory "${overlayDir}" -Verb RunAs -Wait`;
+
+        console.log('Launching admin process (waiting)...');
+        execSync(`powershell -Command "${psCommand}"`);
+        console.log('Admin process has closed.');
+
+      } else {
+        // macOS / Linux: Use sudo
+        // 'stdio: inherit' lets the user type their password in the terminal
+        console.log('Launching admin process via sudo...');
+        execSync(`sudo "${overlayPath}"`, {
+          cwd: overlayDir,
+          stdio: 'inherit'
+        });
+        console.log('Admin process has closed.');
+      }
+    } catch (error) {
+      console.error('Failed to run as admin or user denied permissions:', error.message);
+    }
     initMenuInputEngine();
     returnToMenu();
-  });
+  } else {
+    const overlayProcess = spawn(overlayPath, [], {
+      cwd: overlayDir,
+      stdio: 'inherit'
+    });
 
-  overlayProcess.on('error', (err) => {
-    console.error(`\x1b[31m[Spawn Error]: ${err.message}\x1b[0m\n`);
-    initMenuInputEngine();
-    returnToMenu();
-  });
+    overlayProcess.on('close', (code) => {
+      console.log(`\n👋 Sono-Overlay completed or closed (Code: ${code}).`);
+      initMenuInputEngine();
+      returnToMenu();
+    });
+
+    overlayProcess.on('error', (err) => {
+      console.error(`\x1b[31m[Spawn Error]: ${err.message}\x1b[0m\n`);
+      initMenuInputEngine();
+      returnToMenu();
+    });
+  }
 }
 
 function renderMenu() {
@@ -560,7 +654,7 @@ function returnToMenu() {
 // Automatically scrubs loose, half-downloaded or corrupted temp files from previous sessions
 function cleanTrailingDebris(workingDir) {
   const targets = [path.join(workingDir, 'addons'), path.join(workingDir, 'Sono-Overlay'), path.join(workingDir, 'server')];
-  
+
   targets.forEach(dir => {
     try {
       if (!fs.existsSync(dir)) return;

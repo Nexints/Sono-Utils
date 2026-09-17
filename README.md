@@ -12,6 +12,8 @@ This program launches a bunch of utilities for the game Sonolus.
 SonoUtils contains:
 - Sono-Overlay
 - Sono-Server
+- Sekai-Overlay
+- Sono-AviUtl
 - YT-DLP
 
 All in one program!
@@ -26,7 +28,8 @@ This tool is intended to be used in this workflow:
 - Start the server and record a white / black BG gameplay (needed for Sono-Overlay)
 - Shut down the custom server and then swap to Sono-Overlay
 - Download the .mp4 file
-- Use Sono-Overlay to get the overlay using local files
+- Use Sono-Overlay to get the overlay using the server (launched in background)
+- If missing requirements: Use Sono-Aviutl (downloads all necessary requirements)
 - Use AviUtl2 to edit your video
 
 This tool should speed up testing by orders of magnitude!
@@ -40,13 +43,12 @@ This tool should speed up testing by orders of magnitude!
 Sono-Utils:
 - Made by Nexint (https://nexint.ca/)
 - Depends on other projects
-- https://github.com/Nexints/Sono-Utils
+- https://github.com/Sono-Suite/Sono-Utils
 ```
 
 2. This tool **should not be used for malicious purposes** (such as, but not limited to: spreading misinformation on social media).
 3. The author **assumes no responsibility whatsoever** for any issues or disadvantages arising from the use of this tool. This tool is provided AS IS, with no warranties.
-4. (NEW) You are not allowed to use this tool with official SEGA assets.
-5. (NEW) You are not to use this tool on other people's charts, unless you have express permission from said person.
+4. (NEW) You are not to use this tool on other people's charts, unless you have express permission from said person.
 
 ## Legal:
 The included ProSeka Faithful UI is governed under my [Nexint TOS](https://nexint.ca/tos). The wrapper (this utility) is under the Apache 2.0, but other utilities are under varying licenses. Consult the utilities in question if you want to modify them.
