@@ -5,13 +5,13 @@ This program is simply a wrapper that makes calling Sono-Overlay easier for the 
 as well as unifies all Sonolus utilities into one megapackage.
 */
 
-const { spawn, execSync, exec } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { release } = require('os');
-const ver = "1.0.2"
+const ver = "1.0.3"
 
 const MENU_ITEMS = [
   'Launch Sonolus Server',
@@ -19,6 +19,7 @@ const MENU_ITEMS = [
   'Launch Sekai-Overlay',
   'Launch YT-DLP wrapper',
   'Launch Sono-AviUtl',
+  'Launch Sono-Charts',
   'Update All Subsystems', // Added Update Option
   'Credits',
   'Disclaimers',
@@ -222,6 +223,16 @@ function handleSelection(label) {
       startSonoOverlayProcess(aviutlDir, overlayPath, true);
     }, false);
     return;
+  } else if (label === 'Launch Sono-Charts') {
+    const chartsDir = path.join(workingDir, 'Sono-Charts');
+    const binaryName = process.platform === 'win32' ? 'sono-charts.exe' : 'sono-charts';
+    const overlayPath = path.join(chartsDir, binaryName);
+
+    // Call the dynamic loader passing false so it runs instantly if present
+    verifyAssetDependency(workingDir, 'sono-charts', () => {
+      startSonoOverlayProcess(chartsDir, overlayPath, false, true);
+    }, false);
+    return;
   }
 }
 
@@ -232,6 +243,7 @@ function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownl
   const sekaiOverlayDir = path.join(workingDir, 'Sekai-Overlay');
   const aviutlDir = path.join(workingDir, 'Sono-AviUtl');
   const serverDir = path.join(workingDir, 'server');
+  const chartsDir = path.join(workingDir, 'Sono-Charts');
   const isWin = process.platform === 'win32';
 
   const ASSET_MANIFESTS = {
@@ -308,6 +320,26 @@ function verifyAssetDependency(workingDir, assetKey, onReadyCallback, forceDownl
           try {
             execSync(`unzip -v`, { stdio: 'ignore' });
             execSync(`unzip -o "${tmp}" -d "${aviutlDir}"`);
+          } catch (e) {
+            throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
+          }
+        }
+      }
+    },
+    'sono-charts': {
+      repo: 'Sono-Suite/Sono-ChartEditor',
+      binary: isWin ? 'sono-charts.exe' : 'sono-charts',
+      targetDir: chartsDir,
+      getPattern: () => '.zip',
+      extract: (tmp, dest) => {
+        console.log(`Extraction in progress...`);
+        if (isWin) {
+          execSync(`powershell -Command "Expand-Archive -Path '${tmp}' -DestinationPath '${chartsDir}' -Force"`);
+        } else {
+          // Safeguard: Verify system zip capability before spawning process loops
+          try {
+            execSync(`unzip -v`, { stdio: 'ignore' });
+            execSync(`unzip -o "${tmp}" -d "${chartsDir}"`);
           } catch (e) {
             throw new Error("Missing system dependency: 'unzip' utility is required on this system profile. Please install it.");
           }
@@ -566,7 +598,7 @@ function downloadFile(url, dest, callback) {
 }
 
 // Helper function to launch Sono-Overlay once downloaded/extracted
-function startSonoOverlayProcess(overlayDir, overlayPath, adminNeeded) {
+function startSonoOverlayProcess(overlayDir, overlayPath, adminNeeded, bypass) {
   process.stdin.removeListener('data', onRawConsoleDataInput);
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false);
@@ -601,7 +633,10 @@ function startSonoOverlayProcess(overlayDir, overlayPath, adminNeeded) {
     } catch (error) {
       console.error('Failed to run as admin or user denied permissions:', error.message);
     }
+    if(!bypass){
     initMenuInputEngine();
+
+    }
     returnToMenu();
   } else {
     const overlayProcess = spawn(overlayPath, [], {

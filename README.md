@@ -14,6 +14,7 @@ SonoUtils contains:
 - Sono-Server
 - Sekai-Overlay
 - Sono-AviUtl
+- Sono-ChartEditor
 - YT-DLP
 
 All in one program!
